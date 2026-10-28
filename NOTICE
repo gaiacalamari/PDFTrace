@@ -1,0 +1,17 @@
+PDFTrace
+Copyright the PDFTrace contributors.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components used at run time (not bundled in the source distribution):
+- pdfplumber (MIT), pdfminer.six (MIT), pypdfium2 (Apache-2.0 / BSD-3-Clause), Pillow (MIT-CMU)
+- fontTools (MIT)
+- PySide6 / Qt for Python (LGPL-3.0-only OR GPL-2.0/3.0), optional GUI extra
+- Poppler utilities pdfinfo, pdffonts, pdfimages (GPL-2.0-or-later / GPL-3.0), executed as
+  separate processes and never linked. Standalone builds that ship Poppler binaries must
+  comply with the GPL (see docs/DEPENDENCIES.md).
+- Toolbox tools (qpdf, MuPDF, ExifTool, pdfresurrect, Ghostscript, pdftk-java, pdfcpu, pdfid,
+  pdf-parser): optional third-party programs executed as separate processes, not distributed with
+  PDFTrace. pikepdf (MPL-2.0) and pypdf (BSD-3-Clause): optional Python dependencies.
+- Tesseract OCR (Apache-2.0) and the tessdata_fast language models (Apache-2.0): executed as a separate
+  process; bundled with the Windows standalone build (licence and source in third-party/tesseract).
