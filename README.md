@@ -25,7 +25,7 @@ desktop, in uno strumento a riga di comando e in report esportabili.
 | Toolbox | strumenti open source di terze parti eseguiti sullo stesso file (vedi sotto) |
 | Report | JSON, CSV, Markdown, HTML |
 
-## Download e Installazion (Windows)
+## Download e Installazione (Windows)
 
 - `PDFTrace-<versione>-setup.exe`: programma di installazione. Non richiede diritti di amministratore;
   al termine avvia l'interfaccia. Le opzioni facoltative installano gli strumenti della Toolbox e
