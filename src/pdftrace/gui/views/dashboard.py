@@ -99,7 +99,12 @@ class DashboardView(AnalysisView):
                     ("Pages", s["pages"]),
                     ("Encrypted", s["encrypted"]),
                     ("Linearized", s["linearized"]),
-                    ("Revisions (EOF markers)", s["revisions"]),
+                    (
+                        "Revisions (xref chain)"
+                        if s["revisions_method"] == "xref_chain"
+                        else "Revisions (%%EOF heuristic)",
+                        s["revisions"],
+                    ),
                     ("Incremental updates", analysis.structure.incremental_updates),
                 ],
             ),

@@ -35,6 +35,20 @@ def open_pike(path: Path) -> pikepdf.Pdf:
         raise PDFOpenError(f"{type(exc).__name__}: {exc}") from exc
 
 
+def info_from_bytes(data: bytes) -> dict[str, str] | None:
+    """Trailer /Info of an in-memory PDF (used for earlier revisions pdfminer rejects)."""
+    import io
+
+    try:
+        with pikepdf.open(io.BytesIO(data)) as pdf:
+            info = pdf.trailer.get("/Info")
+            if not isinstance(info, pikepdf.Dictionary):
+                return None
+            return {str(k).lstrip("/"): text(v) or "" for k, v in info.items()}
+    except Exception as exc:  # damaged or truncated data: pikepdf raises several types
+        raise PDFOpenError(f"{type(exc).__name__}: {exc}") from exc
+
+
 def text(value: Any) -> str | None:
     """Plain string for a pikepdf scalar (names keep their leading slash)."""
     if value is None:

@@ -120,6 +120,55 @@ class Metadata:
 
 
 @dataclass
+class XrefSection:
+    """One cross-reference section reached from ``startxref`` / ``/Prev``."""
+
+    offset: int
+    declared_offset: int
+    kind: str  # "table" or "stream"
+    end: int  # first byte after the trailer dictionary (table) or ``endobj`` (stream)
+    prev: int | None = None
+    xref_stm: int | None = None  # hybrid-reference file: offset of the companion xref stream
+    trailer: dict[str, str] = field(default_factory=dict)  # Size, Root, Info, ID, Encrypt, Prev
+
+
+@dataclass
+class RevisionInfo:
+    """One revision of the file, oldest first (index 0 is the original)."""
+
+    index: int
+    xref_offsets: list[int] = field(default_factory=list)
+    kinds: list[str] = field(default_factory=list)
+    startxref: int | None = None  # value of the startxref that closes the revision
+    eof_offset: int | None = None  # start of the closing %%EOF
+    end: int | None = None  # truncation point: the file up to here is this revision
+    linearized: bool = False
+    trailer: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class XrefChain:
+    """Revisions reconstructed by following startxref and the /Prev chain."""
+
+    #: "xref_chain" when the chain was followed, "eof_heuristic" when it could not be.
+    method: str = "xref_chain"
+    #: False when the chain breaks before reaching a section without /Prev.
+    complete: bool = True
+    sections: list[XrefSection] = field(default_factory=list)  # newest first, as walked
+    revisions: list[RevisionInfo] = field(default_factory=list)  # oldest first
+    linearized: bool = False
+    linearization_length: int | None = None  # /L of the linearization dictionary
+    orphan_eof_offsets: list[int] = field(default_factory=list)
+    orphan_eof_in_stream: list[int] = field(default_factory=list)  # subset (heuristic)
+    unreachable_xref_offsets: list[int] = field(default_factory=list)
+    unreachable_xref_in_stream: list[int] = field(default_factory=list)  # subset (heuristic)
+    #: Unreachable sections outside stream data and closed by their own startxref/%%EOF:
+    #: complete earlier versions that a conforming reader no longer sees.
+    detached_revisions: list[RevisionInfo] = field(default_factory=list)
+    anomalies: list[str] = field(default_factory=list)
+
+
+@dataclass
 class StructureInfo:
     header_version: str | None = None
     header_offset: int | None = None
@@ -137,6 +186,7 @@ class StructureInfo:
     encrypted: bool = False
     trailing_bytes_after_eof: int = 0
     incremental_updates: int = 0
+    xref_chain: XrefChain = field(default_factory=XrefChain)
     keyword_counts: dict[str, int] = field(default_factory=dict)
     comments: list[str] = field(default_factory=list)
     trailer_ids: list[list[str]] = field(default_factory=list)

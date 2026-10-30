@@ -113,26 +113,56 @@ class MetadataAnalyzer(Analyzer):
 
     @staticmethod
     def _earlier_revisions(ctx: AnalysisContext, meta: Metadata) -> None:
-        """Read the Info dictionary of each earlier revision (file truncated at each %%EOF)."""
-        ends = [m.end() for m in re.finditer(rb"%%EOF", ctx.raw_bytes)][:-1]
-        for end in reversed(ends[-MAX_REVISIONS:]):
+        """Read the Info dictionary of each earlier revision.
+
+        Revision boundaries come from the cross-reference chain (startxref and
+        /Prev): each earlier revision is the file truncated at the %%EOF that
+        closes its section. %%EOF markers inside embedded data and the first
+        marker of a linearized file are therefore not treated as revisions.
+        Detached revisions (complete sections no longer reachable through /Prev)
+        are read too and labelled as such.
+        """
+        chain = ctx.xref_chain()
+        targets = [
+            (r.end, f"earlier_revision_{r.index}_{chain.method}_end_at_byte_{r.end}")
+            for r in chain.revisions[:-1]
+            if r.end is not None
+        ]
+        targets += [
+            (r.end, f"detached_revision_xref_{r.xref_offsets[0]}_end_at_byte_{r.end}")
+            for r in chain.detached_revisions
+            if r.end is not None
+        ]
+        targets.sort(reverse=True)  # newest first, like the current revision at index 0
+        for end, source in targets[:MAX_REVISIONS]:
             ctx.check_cancelled()
-            try:
-                pdf = pa.open_bytes(ctx.raw_bytes[:end])
-            except pa.PDFOpenError:
-                continue
+            values = MetadataAnalyzer._info_at(ctx.raw_bytes[:end])
+            if values is not None:
+                meta.info_revisions.append(
+                    InfoRevision(index=len(meta.info_revisions), values=values[0], source=source + values[1])
+                )
+
+    @staticmethod
+    def _info_at(data: bytes) -> tuple[dict[str, str], str] | None:
+        """Info dictionary of a truncated revision: pdfminer first, then pikepdf (qpdf)."""
+        try:
+            pdf = pa.open_bytes(data)
+        except pa.PDFOpenError:
+            pdf = None
+        if pdf is not None:
             try:
                 dicts = pa.info_dicts(pdf)
                 if dicts:
-                    meta.info_revisions.append(
-                        InfoRevision(
-                            index=len(meta.info_revisions),
-                            values={str(k): pa.to_text(v) or "" for k, v in dicts[0].items()},
-                            source=f"earlier_revision_truncated_at_byte_{end}",
-                        )
-                    )
+                    return {str(k): pa.to_text(v) or "" for k, v in dicts[0].items()}, ""
             finally:
                 pdf.close()
+        from pdftrace.integrations.pikepdf_adapter import info_from_bytes
+
+        try:
+            values = info_from_bytes(data)
+        except pa.PDFOpenError:
+            return None
+        return (values, "_pikepdf") if values else None
 
     @staticmethod
     def _read_info(info: dict[str, Any], meta: Metadata) -> None:

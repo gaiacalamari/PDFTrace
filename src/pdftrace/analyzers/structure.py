@@ -1,5 +1,8 @@
 """Physical structure: header, revisions, xref, trailers, object usage.
 
+Revisions come from :mod:`pdftrace.core.xref_chain` (startxref and /Prev),
+not from the number of %%EOF markers.
+
 The scan works on raw bytes (like pdfid) and therefore also on files that the
 PDF parser rejects. Keywords stored inside compressed object streams are not
 visible to a byte scan; this limitation is recorded in the diagnostics.
@@ -83,8 +86,14 @@ class StructureAnalyzer(Analyzer):
         if info.eof_offsets:
             tail = data[info.eof_offsets[-1] + 5 :]
             info.trailing_bytes_after_eof = len(tail.strip(b"\r\n\t \x00"))
-        extra = 1 if info.linearized else 0
-        info.incremental_updates = max(0, len(info.eof_offsets) - 1 - extra)
+        chain = ctx.xref_chain()
+        info.xref_chain = chain
+        info.linearized = info.linearized or chain.linearized
+        info.incremental_updates = max(0, len(chain.revisions) - 1)
+        if chain.method != "xref_chain":
+            diagnostics.append("Cross-reference chain could not be followed: revisions estimated from %%EOF markers.")
+        elif not chain.complete:
+            diagnostics.append("Cross-reference chain is broken: older revisions may be missing.")
 
         try:
             pdf = ctx.pdf()

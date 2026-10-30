@@ -460,23 +460,100 @@ def structure_checks(a: PDFAnalysis, s: Settings) -> Iterator[Draft]:
             {},
             None,
         )
+    ch = st.xref_chain
+    boundaries = [
+        {"revision": r.index, "xref_offsets": r.xref_offsets, "kinds": r.kinds, "end": r.end} for r in ch.revisions
+    ]
+    if ch.method != "xref_chain":
+        yield (
+            "structure",
+            Severity.NOTICE,
+            "Cross-reference chain could not be followed",
+            "No cross-reference section is reachable from startxref: the revision count is only "
+            "estimated from %%EOF markers and may be wrong (embedded data, linearization).",
+            {"anomalies": ch.anomalies[:20], "eof_offsets": st.eof_offsets},
+            None,
+        )
     if st.incremental_updates:
+        how = (
+            "Revisions reconstructed by following startxref and the /Prev chain of the "
+            "cross-reference sections; each earlier revision is the file truncated at the %%EOF "
+            "that closes its section."
+            if ch.method == "xref_chain"
+            else "Revisions estimated from %%EOF markers (heuristic)."
+        )
         yield (
             "structure",
             Severity.NOTICE,
             f"{st.incremental_updates} incremental update(s)",
-            "The file contains more than one revision; earlier revisions can be recovered by "
-            "truncating the file after each %%EOF.",
-            {"eof_offsets": st.eof_offsets, "startxref": st.startxref_values},
+            how,
+            {"method": ch.method, "revisions": boundaries},
             None,
         )
-    elif len(st.eof_offsets) == 1 and not st.linearized:
+    elif ch.method == "xref_chain" and ch.complete and len(ch.revisions) == 1:
         yield (
             "structure",
             Severity.INFO,
             "Single revision",
-            "No incremental updates: if the file was edited, it was fully rewritten.",
-            {},
+            "The cross-reference chain has a single revision: if the file was edited, it was fully rewritten.",
+            {"revisions": boundaries},
+            None,
+        )
+    if ch.method == "xref_chain" and not ch.complete:
+        yield (
+            "structure",
+            Severity.WARNING,
+            "Broken cross-reference chain",
+            "The /Prev chain cannot be followed to the original section: older revisions may exist "
+            "but are not reachable through the trailer.",
+            {"anomalies": ch.anomalies[:20]},
+            None,
+        )
+    if ch.orphan_eof_offsets:
+        yield (
+            "structure",
+            Severity.NOTICE,
+            f"{len(ch.orphan_eof_offsets)} %%EOF marker(s) outside the cross-reference chain",
+            "These markers do not close any section reachable from the trailer and are not counted "
+            "as revisions. They may lie inside embedded data (attachment, nested PDF, binary "
+            "stream) or belong to a section no longer referenced by the chain: review the bytes at "
+            "these offsets.",
+            {"offsets": ch.orphan_eof_offsets[:50], "inside_stream": ch.orphan_eof_in_stream[:50]},
+            None,
+        )
+    if ch.unreachable_xref_offsets:
+        outside = [o for o in ch.unreachable_xref_offsets if o not in ch.unreachable_xref_in_stream]
+        yield (
+            "structure",
+            Severity.WARNING if outside else Severity.NOTICE,
+            "Cross-reference sections not reachable from the trailer",
+            "Well-formed xref sections exist in the file but no startxref or /Prev leads to them. "
+            "They may belong to an embedded document or to a revision detached from the chain "
+            "(e.g. a trailer written without /Prev)."
+            + (
+                f" {len(ch.detached_revisions)} of them are complete revisions closed by their own "
+                "startxref/%%EOF: the file truncated there is an earlier version that readers no "
+                "longer show (see the metadata revisions labelled 'detached')."
+                if ch.detached_revisions
+                else ""
+            ),
+            {
+                "offsets": ch.unreachable_xref_offsets[:50],
+                "inside_stream": ch.unreachable_xref_in_stream[:50],
+                "detached_revisions": [
+                    {"xref_offset": r.xref_offsets[0], "end": r.end} for r in ch.detached_revisions[:50]
+                ],
+            },
+            None,
+        )
+    if ch.anomalies and ch.method == "xref_chain":
+        yield (
+            "structure",
+            Severity.NOTICE,
+            "Cross-reference chain anomalies",
+            "Offsets or pointers that do not match the standard layout; readers may repair or "
+            "interpret them differently.",
+            {"anomalies": ch.anomalies[:20]},
             None,
         )
     if st.redefined_objects:
@@ -686,6 +763,17 @@ def external_tools(a: PDFAnalysis, s: Settings) -> Iterator[Draft]:
                 f"pdfresurrect: {p['versions']} versions",
                 "pdfresurrect detects several versions (incremental saves) of the document.",
                 ev,
+                None,
+            )
+        chain_revisions = len(a.structure.xref_chain.revisions)
+        if run.tool_id == "pdfresurrect" and p.get("versions") and chain_revisions and p["versions"] != chain_revisions:
+            yield (
+                "structure",
+                Severity.NOTICE,
+                "Revision count differs between pdfresurrect and the xref chain",
+                f"pdfresurrect reports {p['versions']} version(s), the cross-reference chain "
+                f"{chain_revisions}. Compare the %%EOF offsets with the revision boundaries.",
+                {**ev, "xref_chain_revisions": chain_revisions, "eof_offsets": a.structure.eof_offsets},
                 None,
             )
         if run.tool_id == "pdfid":

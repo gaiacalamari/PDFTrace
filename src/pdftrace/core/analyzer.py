@@ -59,6 +59,7 @@ class AnalysisContext:
         self._raw: bytes | None = None
         self._pike: Any = None
         self._pike_error: str | None = None
+        self._xref_chain: Any = None
 
     def check_cancelled(self) -> None:
         if self.cancel_event.is_set():
@@ -70,6 +71,14 @@ class AnalysisContext:
         if self._raw is None:
             self._raw = self.path.read_bytes()
         return self._raw
+
+    def xref_chain(self) -> Any:
+        """Revisions reconstructed from startxref and the /Prev chain (computed once)."""
+        if self._xref_chain is None:
+            from pdftrace.core.xref_chain import walk_xref_chain
+
+            self._xref_chain = walk_xref_chain(self.raw_bytes)
+        return self._xref_chain
 
     def pdf(self) -> Any:
         """pdfplumber document, opened once. Raises :class:`PDFOpenError`."""
@@ -107,6 +116,7 @@ class AnalysisContext:
             finally:
                 self._pdf = None
         self._raw = None
+        self._xref_chain = None
 
 
 class Analyzer(ABC):

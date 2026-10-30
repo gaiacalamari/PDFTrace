@@ -35,7 +35,8 @@ def summary(analysis: PDFAnalysis) -> dict[str, Any]:
         "pdf_version": analysis.metadata.pdf_version,
         "encrypted": analysis.metadata.encrypted or analysis.structure.encrypted,
         "linearized": analysis.structure.linearized,
-        "revisions": len(analysis.structure.eof_offsets) or None,
+        "revisions": len(analysis.structure.xref_chain.revisions) or None,
+        "revisions_method": analysis.structure.xref_chain.method,
         "fonts_total": len(fonts),
         "fonts_embedded": sum(1 for f in fonts if f.embedded),
         "fonts_subset": sum(1 for f in fonts if f.subset),
@@ -61,6 +62,18 @@ def summary(analysis: PDFAnalysis) -> dict[str, Any]:
         "external_tool_actions": len(analysis.external_runs),
         "external_tools_not_ok": sum(1 for r in analysis.external_runs if r.status != "ok"),
     }
+
+
+def _revisions_label(s: dict[str, Any]) -> str:
+    return "revisions (xref chain)" if s.get("revisions_method") == "xref_chain" else "revisions (%%EOF heuristic)"
+
+
+def _boundaries(chain: Any) -> list[str]:
+    return [
+        f"#{r.index}: xref {r.xref_offsets} ({'/'.join(r.kinds) or '?'}) -> end {r.end}"
+        + (" [linearized]" if r.linearized else "")
+        for r in chain.revisions
+    ]
 
 
 # ----------------------------------------------------------------------- JSON
@@ -614,7 +627,22 @@ def to_markdown(analysis: PDFAnalysis) -> str:
             ["Item", "Value"],
             [
                 ("Header version", analysis.structure.header_version),
+                (
+                    "Revisions",
+                    f"{len(analysis.structure.xref_chain.revisions)} ({analysis.structure.xref_chain.method})",
+                ),
+                ("Revision boundaries", _boundaries(analysis.structure.xref_chain)),
                 ("%%EOF markers", len(analysis.structure.eof_offsets)),
+                ("%%EOF outside the xref chain", analysis.structure.xref_chain.orphan_eof_offsets),
+                ("Unreachable xref sections", analysis.structure.xref_chain.unreachable_xref_offsets),
+                (
+                    "Detached revisions",
+                    [
+                        f"xref {r.xref_offsets[0]} -> end {r.end}"
+                        for r in analysis.structure.xref_chain.detached_revisions
+                    ],
+                ),
+                ("xref chain anomalies", analysis.structure.xref_chain.anomalies),
                 ("Incremental updates", analysis.structure.incremental_updates),
                 ("xref tables / streams", f"{analysis.structure.xref_tables} / {analysis.structure.xref_streams}"),
                 (
@@ -1075,7 +1103,7 @@ def to_html(analysis: PDFAnalysis) -> str:
     figures = [
         (s["pages"], "pages"),
         (f"PDF {s['pdf_version'] or '?'}", "header version"),
-        (s["revisions"] or "?", "revisions (EOF markers)"),
+        (s["revisions"] or "?", _revisions_label(s)),
         (s["fonts_total"], "fonts"),
         (s["fonts_embedded"], "embedded fonts"),
         (s["images_total"], "images"),
@@ -1185,8 +1213,17 @@ def to_html(analysis: PDFAnalysis) -> str:
             ["Item", "Value"],
             [
                 ("Header version", st.header_version),
+                ("Revisions", f"{len(st.xref_chain.revisions)} ({st.xref_chain.method})"),
+                ("Revision boundaries", _boundaries(st.xref_chain)),
                 ("%%EOF offsets", st.eof_offsets),
+                ("%%EOF outside the xref chain", st.xref_chain.orphan_eof_offsets),
                 ("startxref", st.startxref_values),
+                ("Unreachable xref sections", st.xref_chain.unreachable_xref_offsets),
+                (
+                    "Detached revisions",
+                    [f"xref {r.xref_offsets[0]} -> end {r.end}" for r in st.xref_chain.detached_revisions],
+                ),
+                ("xref chain anomalies", st.xref_chain.anomalies),
                 ("Incremental updates", st.incremental_updates),
                 ("xref tables / streams", f"{st.xref_tables} / {st.xref_streams}"),
                 ("Objects defined / unique", f"{st.object_definitions} / {st.unique_objects}"),
