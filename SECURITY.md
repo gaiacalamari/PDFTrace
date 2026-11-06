@@ -34,6 +34,6 @@ The tool is designed so that opening a file cannot execute code from it, alter i
 
 ## Reporting a vulnerability
 
-Vulnerabilities are reported privately through GitHub Security Advisories (repository **Security** tab,
+Vulnerabilities are reported privately through security@defencetech.it (repository **Security** tab,
 *Report a vulnerability*), not through public issues. A report includes a description and, when
 possible, a minimal reproducer without personal or case data. Reports are acknowledged within 7 days.
