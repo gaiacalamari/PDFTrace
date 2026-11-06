@@ -4,8 +4,7 @@ PDFTrace is a forensic tool: correctness and traceability take precedence over n
 
 ## Ground rules
 
-1. **Do not invent library behaviour.** When integrating a tool or library, cite the version and the
-   documentation or source verified in `docs/DEPENDENCIES.md`, and add a test on real output.
+1. **Do not invent library behaviour.** When integrating a tool or library, cite the version and and add a test on real output.
 2. **Keep provenance.** Every new value must record its `source` and `confidence` (`direct`, `derived`,
    `heuristic`).
 3. **Neutral wording.** Findings describe observations ("difference", "requires review"). Never use
@@ -27,7 +26,7 @@ PDFTrace is a forensic tool: correctness and traceability take precedence over n
 ## Adding a Toolbox tool
 
 1. Verify the tool on a real installation: version option, read-only options, output format, exit
-   codes, licence. Record them in `docs/TOOLS.md`.
+   codes, licence. 
 2. Add a `ToolSpec` to `BUILTIN_TOOLS` in `src/pdftrace/integrations/toolbox.py`. Never use options
    that write or modify files.
 3. Optionally add a parser in `integrations/tool_parsers.py`, tested on captured real output, and a rule
